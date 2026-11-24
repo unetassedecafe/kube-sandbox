@@ -4,6 +4,16 @@ All notable changes to the kube-sandbox Hermes terminal backend plugin.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-11-24
+
+### Fixed
+- exec websocket now negotiates the streaming subprotocol via `Sec-WebSocket-Protocol`
+  (v5 preferred) instead of only `X-Stream-Protocol-Version`, and ends stdin with the
+  v5 CLOSE frame `[0xFF, channel]`. Previously no subprotocol was negotiated and stdin
+  EOF was signalled with a stray unframed byte, so any command reading stdin inside the
+  sandbox (e.g. the code-execution tool's `base64 -d` file ship) hung until timeout.
+  Requires k8s >= 1.31 for v5.
+
 ## [0.2.0] - 2026-11-24
 
 ### Added

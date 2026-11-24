@@ -187,7 +187,10 @@ class KubeClient:
             extra=["Upgrade: websocket",
                    "Connection: Upgrade",
                    "Sec-WebSocket-Version: 13",
-                   "X-Stream-Protocol-Version: v4.channel.k8s.io",
+                   # Negotiate via Sec-WebSocket-Protocol (what the apiserver's websocket
+                   # dialer reads); v5 first so we get the per-channel CLOSE signal.
+                   "Sec-WebSocket-Protocol: v5.channel.k8s.io,v4.channel.k8s.io,v3.channel.k8s.io,v2.channel.k8s.io,v1.channel.k8s.io",
+                   "X-Stream-Protocol-Version: v5.channel.k8s.io,v4.channel.k8s.io",
                    f"Sec-WebSocket-Key: {base64.b64encode(os.urandom(16)).decode()}"],
             timeout=min(timeout, 30.0))
         if status != 101:
@@ -203,15 +206,13 @@ class KubeClient:
     def _exec_roundtrip(ws: "_WebSocket", stdin_data: bytes | None, timeout: float) -> tuple[bytes, int]:
         if stdin_data:
             ws.send_binary(b"\x00" + stdin_data)
-        # v4 stdin is "data frames, then a zero byte, then a close-write" (an unframed byte the
-        # server's chanConn reads as EOF). A socket half-close tears the whole connection down on this
-        # API server, so the end of input is one zero byte plus the unframed close-write: a command that
-        # reads stdin gets a single NUL it rejects, never a hang.
-        ws.send_binary(b"\x00")
-        try:
-            ws.sock.sendall(b"\x00")  # the close-write that ends stdin, unframed
-        except OSError:
-            pass
+        # End stdin with the v5 CLOSE signal: one binary frame whose payload is
+        # [StreamClose(0xFF), channel(0)]. The old "zero byte + unframed close-write"
+        # never signalled EOF on a negotiated websocket subprotocol, so any command
+        # reading stdin (e.g. the code-execution tool's base64 file ship) hung until
+        # the 30s timeout. On a v4-negotiated server the CLOSE frame is discarded as
+        # an unknown stream id, so v5 (k8s >= 1.31) is required for stdin EOF.
+        ws.send_binary(b"\xff\x00")
         output, exit_code = ws.drain(timeout)
         return output, (0 if exit_code is None else exit_code)
 
@@ -231,7 +232,8 @@ class KubeClient:
             extra=["Upgrade: websocket",
                    "Connection: Upgrade",
                    "Sec-WebSocket-Version: 13",
-                   "X-Stream-Protocol-Version: v4.channel.k8s.io",
+                   "Sec-WebSocket-Protocol: v5.channel.k8s.io,v4.channel.k8s.io,v3.channel.k8s.io,v2.channel.k8s.io,v1.channel.k8s.io",
+                   "X-Stream-Protocol-Version: v5.channel.k8s.io,v4.channel.k8s.io",
                    f"Sec-WebSocket-Key: {base64.b64encode(os.urandom(16)).decode()}"],
             timeout=30.0)
         if status != 101:
@@ -313,12 +315,8 @@ class _WebSocket:
         self._send(0x2, b"\x00" + data)
 
     def send_stdin_eof(self) -> None:
-        """End stdin on a persistent stream: a zero data frame, then the unframed close-write."""
-        self._send(0x2, b"\x00")
-        try:
-            self.sock.sendall(b"\x00")
-        except OSError:
-            pass
+        """End stdin on a persistent stream: the v5 CLOSE frame [StreamClose, channel 0]."""
+        self._send(0x2, b"\xff\x00")
 
     def recv_channel(self, timeout: float | None = None):
         """Next ``(channel, data)`` frame, or ``None`` on close/timeout. Blocks for at most *timeout*."""
