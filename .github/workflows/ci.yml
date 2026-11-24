@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Offline protocol tests
+        run: python -m pip install --quiet pytest && python -m pytest tests/test_protocol.py -q
+      - name: Compile all plugin sources
+        run: python -m py_compile plugin/__init__.py kubesandbox/*.py tests/*.py tools/*.py
+      # tests/test_environment.py imports Hermes core (agent.*); it runs where a
+      # hermes-agent checkout is available (see pytest.ini), not in this lightweight CI.
