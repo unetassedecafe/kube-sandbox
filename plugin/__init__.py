@@ -287,3 +287,8 @@ class KubeSandboxProvider(TerminalEnvironmentProvider):
         persistent = bool((container_config or {}).get("container_persistent"))
         return KubeSandboxEnvironment(cwd=cwd, timeout=timeout, task_id=task, image=override,
                                       persistent=persistent)
+
+
+def register(ctx) -> None:
+    """Plugin entry point: register the terminal backend under ``terminal.backend: kube-sandbox``."""
+    ctx.register_terminal_environment_provider(KubeSandboxProvider())
