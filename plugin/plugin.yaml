@@ -1,5 +1,5 @@
 name: kube-sandbox
-version: 0.2.1
+version: 0.2.2
 description: Run every Hermes command in a gVisor micro-VM claimed from the mocha sandbox warm pool
 kind: backend
 requires_hermes: ">=0.22.5"

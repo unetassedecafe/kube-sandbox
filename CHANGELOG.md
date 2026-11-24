@@ -4,6 +4,12 @@ All notable changes to the kube-sandbox Hermes terminal backend plugin.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-11-24
+
+### Fixed
+- Apply the v0.2.1 websocket fix to the packaged `plugin/kubesandbox/` copy as well
+  (the deployment installs `plugin/`, not the repo-root package).
+
 ## [0.2.1] - 2026-11-24
 
 ### Fixed
